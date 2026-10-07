@@ -1,4 +1,26 @@
 let token = "";
+
+function getProvidedToken(url) {
+	const tokenFromParam = url.searchParams.get('token');
+	if (tokenFromParam) {
+		return tokenFromParam;
+	}
+
+	const query = url.search ? decodeURIComponent(url.search.slice(1)) : '';
+	if (!query) {
+		return '';
+	}
+
+	const parts = query.split('&').filter(Boolean);
+	for (const part of parts) {
+		if (!part.includes('=')) {
+			return decodeURIComponent(part);
+		}
+	}
+
+	return '';
+}
+
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
@@ -17,11 +39,14 @@ export default {
 				githubRawUrl += url.pathname;
 			}
 			//console.log(githubRawUrl);
-			
+
 			// 初始化请求头
 			const headers = new Headers();
 			let authTokenSet = false; // 标记是否已经设置了认证token
-			
+
+			// 获取 token：兼容 ?token=xxx 和 ?xxx 两种写法
+			const providedToken = getProvidedToken(url);
+
 			// 检查TOKEN_PATH特殊路径鉴权
 			if (env.TOKEN_PATH) {
 				const 需要鉴权的路径配置 = await ADD(env.TOKEN_PATH);
@@ -44,7 +69,6 @@ export default {
 						normalizedPathname.startsWith(normalizedPath + '/');
 
 					if (pathMatches) {
-						const providedToken = url.searchParams.get('token');
 						if (!providedToken) {
 							return new Response('TOKEN不能为空', { status: 400 });
 						}
@@ -63,14 +87,14 @@ export default {
 					}
 				}
 			}
-			
+
 			// 如果TOKEN_PATH没有设置认证，使用默认token逻辑
 			if (!authTokenSet) {
 				if (env.GH_TOKEN && env.TOKEN) {
-					if (env.TOKEN == url.searchParams.get('token')) token = env.GH_TOKEN || token;
-					else token = url.searchParams.get('token') || token;
-				} else token = url.searchParams.get('token') || env.GH_TOKEN || env.TOKEN || token;
-				
+					if (env.TOKEN == providedToken) token = env.GH_TOKEN || token;
+					else token = providedToken || token;
+				} else token = providedToken || env.GH_TOKEN || env.TOKEN || token;
+
 				const githubToken = token;
 				//console.log(githubToken);
 				if (!githubToken || githubToken == '') {
